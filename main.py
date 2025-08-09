@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 import os, time
 
-# Pixel map for "KUNAL" (5 rows tall)
-# 1 = █ pixel, 0 = space
-KUNAL_PIXELS = [
+# "KUNAL" pixel map (█ = filled, space = empty)
+KUNAL = [
     "█   █ ████  █   █ █   █ ████ ",
     "█   █ █   █ ██  █ ██  █ █    ",
     "█   █ ████  █ █ █ █ █ █ █ ██ ",
@@ -11,30 +10,31 @@ KUNAL_PIXELS = [
     " ███  █     █   █ █   █  ███ ",
 ]
 
-# Convert to mutable world
-world = [list(row) for row in KUNAL_PIXELS]
-
-def render():
+def render(display):
     os.system("clear")
-    for row in world:
+    for row in display:
         print("".join(row))
 
+def zigzag_draw(name_pixels):
+    height = len(name_pixels)
+    width = len(name_pixels[0])
+    display = [[" " for _ in range(width)] for _ in range(height)]
+
+    # Zigzag traversal
+    for y in range(height):
+        if y % 2 == 0:  # left to right
+            x_range = range(width)
+        else:           # right to left
+            x_range = range(width - 1, -1, -1)
+
+        for x in x_range:
+            if name_pixels[y][x] == "█":
+                display[y][x] = "█"
+            render(display)
+            time.sleep(0.01)  # speed
+
 if __name__ == "__main__":
-    # Animation: gradually reveal KUNAL
-    total_pixels = sum(row.count("█") for row in KUNAL_PIXELS)
-    revealed = 0
-
-    for y in range(len(world)):
-        for x in range(len(world[0])):
-            if world[y][x] == "█":
-                world[y][x] = " "
-                render()
-                time.sleep(0.005)
-
-    # Reveal effect
-    for y in range(len(world)):
-        for x in range(len(world[0])):
-            if KUNAL_PIXELS[y][x] == "█":
-                world[y][x] = "█"
-                render()
-                time.sleep(0.01)
+    pixels = [list(row) for row in KUNAL]
+    while True:
+        zigzag_draw(pixels)
+        time.sleep(0.5)  # pause before repeating

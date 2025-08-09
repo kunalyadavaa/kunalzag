@@ -167,4 +167,4 @@ def game_loop(stdscr):
                 break
             elif key in (ord('r'), ord('R')) and game_over:
                 # restart
-                snake = [(sx - i, sy) for i in range(INITIAL_SNAKE_]()
+                snake = [(sx - i, sy) for i in range(INITIAL_SNAKE_LENGTH)]

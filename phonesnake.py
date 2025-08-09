@@ -1,170 +1,113 @@
 #!/usr/bin/env python3
-"""
-nokia_snake.py
-
-Retro Nokia-like phone art with an embedded playable Snake game (curses).
-Run with: python3 nokia_snake.py
-"""
-
 import curses
 import random
 import time
-import locale
-locale.setlocale(locale.LC_ALL, '')
 
-# Screen (phone display) size inside the phone art
-SCREEN_W = 22
-SCREEN_H = 12
-
-# Game settings
-INITIAL_SNAKE_LEN = 4
-FRAME_DELAY = 0.10  # seconds per frame (lower = faster)
-FOOD_CHAR = "●"
+# Snake settings
+INITIAL_SNAKE_LENGTH = 5
 SNAKE_CHAR = "█"
+FOOD_CHAR = "●"
+SPEED = 0.15  # seconds per move
 
-# Draw a simple Nokia-like phone frame; positions are relative to top-left of phone window
-PHONE_PAD = [
-    "┌" + "─" * (SCREEN_W + 2) + "┐",  # top border of phone screen
-    "│" + " " * (SCREEN_W + 2) + "│",
-    "│" + " " * (SCREEN_W + 2) + "│",
-    "│" + " " * (SCREEN_W + 2) + "│",
-    "│" + " " * (SCREEN_W + 2) + "│",
-    "│" + " " * (SCREEN_W + 2) + "│",
-    "│" + " " * (SCREEN_W + 2) + "│",
-    "│" + " " * (SCREEN_W + 2) + "│",
-    "│" + " " * (SCREEN_W + 2) + "│",
-    "│" + " " * (SCREEN_W + 2) + "│",
-    "│" + " " * (SCREEN_W + 2) + "│",
-    "│" + " " * (SCREEN_W + 2) + "│",
-    "└" + "─" * (SCREEN_W + 2) + "┘",  # bottom border of phone screen
-]
+# Nokia phone dimensions
+PHONE_WIDTH = 30
+PHONE_HEIGHT = 20
 
-# Below the screen, draw a keypad block (static)
-KEYPAD = [
-    "     ____  ____  ____     ",
-    "    | 1  || 2  || 3  |    ",
-    "    |____||____||____|    ",
-    "    | 4  || 5  || 6  |    ",
-    "    |____||____||____|    ",
-    "    | 7  || 8  || 9  |    ",
-    "    |____||____||____|    ",
-    "    | *  || 0  ||  # |    ",
-    "    |____||____||____|    ",
-]
+def draw_phone(stdscr):
+    """Draw a Nokia-style phone with a screen for the game."""
+    stdscr.clear()
+    h, w = stdscr.getmaxyx()
 
-def place_food(snake, w, h):
-    """Place food inside screen area, not on the snake."""
-    while True:
-        fx = random.randrange(0, w)
-        fy = random.randrange(0, h)
-        if (fx, fy) not in snake:
-            return fx, fy
+    # Center phone
+    top = (h - PHONE_HEIGHT) // 2 - 2
+    left = (w - PHONE_WIDTH) // 2 - 2
 
-def draw_phone(stdscr, top, left):
-    """Draw static phone art (frame + keypad) at top,left."""
-    # Draw header (brand-ish)
-    stdscr.addstr(top - 2, left + (SCREEN_W // 2) - 3, "NOKIA", curses.A_BOLD)
+    # Draw phone outline
+    for y in range(PHONE_HEIGHT + 4):
+        for x in range(PHONE_WIDTH + 4):
+            if y == 0 or y == PHONE_HEIGHT + 3:
+                stdscr.addch(top + y, left + x, "#")
+            elif x == 0 or x == PHONE_WIDTH + 3:
+                stdscr.addch(top + y, left + x, "#")
+            else:
+                stdscr.addch(top + y, left + x, " ")
 
-    # Draw phone screen frame (PHONE_PAD)
-    for i, row in enumerate(PHONE_PAD):
-        stdscr.addstr(top + i, left, row)
+    # Draw phone screen border
+    for y in range(PHONE_HEIGHT + 2):
+        for x in range(PHONE_WIDTH + 2):
+            if y == 0 or y == PHONE_HEIGHT + 1:
+                stdscr.addch(top + y + 1, left + x + 1, "+")
+            elif x == 0 or x == PHONE_WIDTH + 1:
+                stdscr.addch(top + y + 1, left + x + 1, "+")
+            else:
+                stdscr.addch(top + y + 1, left + x + 1, " ")
 
-    # Draw keypad under the screen
-    pad_top = top + len(PHONE_PAD) + 1
-    for i, row in enumerate(KEYPAD):
-        stdscr.addstr(pad_top + i, left, row)
+    return top + 2, left + 2  # screen start position
 
-    # small footer text
-    stdscr.addstr(pad_top + len(KEYPAD), left + 2, "Retro Snake — q to quit", curses.A_DIM)
+def main(stdscr):
+    curses.curs_set(0)
+    stdscr.nodelay(1)
+    stdscr.timeout(100)
 
-def game_loop(stdscr):
-    curses.curs_set(0)            # hide cursor
-    stdscr.nodelay(True)         # make getch non-blocking
-    stdscr.keypad(True)          # enable special keys
-    stdscr.timeout(int(FRAME_DELAY * 1000))
+    screen_top, screen_left = draw_phone(stdscr)
 
-    # center phone on the terminal
-    term_h, term_w = stdscr.getmaxyx()
-    phone_h = len(PHONE_PAD) + 1 + len(KEYPAD) + 1
-    phone_w = max(len(PHONE_PAD[0]), len(KEYPAD[0]))
-    top = max(2, (term_h - phone_h) // 2)
-    left = max(2, (term_w - phone_w) // 2)
+    # Initial snake position
+    sx = PHONE_WIDTH // 2
+    sy = PHONE_HEIGHT // 2
+    snake = [(sx - i, sy) for i in range(INITIAL_SNAKE_LENGTH)]
+    direction = (1, 0)  # right
 
-    # initial snake (centered inside screen area)
-    sx = SCREEN_W // 2
-    sy = SCREEN_H // 2
-    snake = [(sx - i, sy) for i in range(INITIAL_SNAKE_LEN)][::-1]  # list of (x,y) tail->head
-    direction = (1, 0)  # moving right
+    # Food
+    food = (random.randint(1, PHONE_WIDTH - 2), random.randint(1, PHONE_HEIGHT - 2))
+
     score = 0
-
-    food = place_food(snake, SCREEN_W, SCREEN_H)
-
-    paused = False
-    game_over = False
-
     while True:
-        # draw static phone
-        stdscr.erase()
-        draw_phone(stdscr, top, left)
+        # Draw food
+        stdscr.addch(screen_top + food[1], screen_left + food[0], FOOD_CHAR)
 
-        # draw the screen background (inside the frame)
-        screen_top = top + 1
-        screen_left = left + 1
-        for y in range(SCREEN_H):
-            # each row inside the frame is SCREEN_W wide
-            stdscr.addstr(screen_top + y, screen_left, " " * SCREEN_W, curses.color_pair(0))
+        # Draw snake
+        for x, y in snake:
+            stdscr.addch(screen_top + y, screen_left + x, SNAKE_CHAR)
 
-        # draw borders inside frame (a small inner border to mimic LCD bezel)
-        stdscr.addstr(screen_top - 1, screen_left - 1, "┌" + "─" * SCREEN_W + "┐")
-        for y in range(SCREEN_H):
-            stdscr.addstr(screen_top + y, screen_left - 1, "│")
-            stdscr.addstr(screen_top + y, screen_left + SCREEN_W, "│")
-        stdscr.addstr(screen_top + SCREEN_H, screen_left - 1, "└" + "─" * SCREEN_W + "┘")
-
-        # draw food
-        fx, fy = food
-        stdscr.addstr(screen_top + fy, screen_left + fx, FOOD_CHAR)
-
-        # draw snake
-        for i, (x, y) in enumerate(snake):
-            ch = SNAKE_CHAR if i == len(snake) - 1 else SNAKE_CHAR
-            stdscr.addstr(screen_top + y, screen_left + x, ch)
-
-        # draw score / status
-        status = f" Score: {score} "
-        stdscr.addstr(screen_top - 2, left + 2, status, curses.A_REVERSE)
-
-        if paused:
-            stdscr.addstr(screen_top + SCREEN_H // 2, screen_left + (SCREEN_W // 2 - 3), " PAUSED ", curses.A_BOLD)
-        if game_over:
-            stdscr.addstr(screen_top + SCREEN_H // 2 - 1, screen_left + (SCREEN_W // 2 - 5), " GAME OVER ", curses.A_BLINK)
-            stdscr.addstr(screen_top + SCREEN_H // 2, screen_left + (SCREEN_W // 2 - 9), " Press 'r' to restart ", curses.A_BOLD)
-
-        stdscr.refresh()
-
-        # input handling
-        try:
-            key = stdscr.getch()
-        except KeyboardInterrupt:
+        # Input
+        key = stdscr.getch()
+        if key == curses.KEY_UP and direction != (0, 1):
+            direction = (0, -1)
+        elif key == curses.KEY_DOWN and direction != (0, -1):
+            direction = (0, 1)
+        elif key == curses.KEY_LEFT and direction != (1, 0):
+            direction = (-1, 0)
+        elif key == curses.KEY_RIGHT and direction != (-1, 0):
+            direction = (1, 0)
+        elif key == ord("q"):
             break
 
-        if key != -1:
-            if key in (curses.KEY_UP, ord('w'), ord('W')):
-                if direction != (0, 1):
-                    direction = (0, -1)
-            elif key in (curses.KEY_DOWN, ord('s'), ord('S')):
-                if direction != (0, -1):
-                    direction = (0, 1)
-            elif key in (curses.KEY_LEFT, ord('a'), ord('A')):
-                if direction != (1, 0):
-                    direction = (-1, 0)
-            elif key in (curses.KEY_RIGHT, ord('d'), ord('D')):
-                if direction != (-1, 0):
-                    direction = (1, 0)
-            elif key in (ord('p'), ord('P')):
-                paused = not paused
-            elif key in (ord('q'), ord('Q')):
-                break
-            elif key in (ord('r'), ord('R')) and game_over:
-                # restart
-                snake = [(sx - i, sy) for i in range(INITIAL_SNAKE_LENGTH)]
+        # Move snake
+        head_x, head_y = snake[0]
+        new_head = ((head_x + direction[0]) % PHONE_WIDTH,
+                    (head_y + direction[1]) % PHONE_HEIGHT)
+
+        if new_head in snake:
+            break  # Game over
+
+        snake.insert(0, new_head)
+
+        # Check food
+        if new_head == food:
+            score += 1
+            food = (random.randint(1, PHONE_WIDTH - 2), random.randint(1, PHONE_HEIGHT - 2))
+        else:
+            tail_x, tail_y = snake.pop()
+            stdscr.addch(screen_top + tail_y, screen_left + tail_x, " ")
+
+        stdscr.addstr(1, 2, f"Score: {score}")
+        stdscr.refresh()
+        time.sleep(SPEED)
+
+    stdscr.nodelay(0)
+    stdscr.addstr(screen_top + PHONE_HEIGHT // 2, screen_left + 5, "GAME OVER!")
+    stdscr.refresh()
+    stdscr.getch()
+
+if __name__ == "__main__":
+    curses.wrapper(main)
